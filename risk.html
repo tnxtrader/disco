@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TNX Risk Desk — ES &amp; NQ Prop Combine Simulator</title>
+<!-- Pro link-preview / Discord unfurl -->
+<meta name="theme-color" content="#0a0a0f" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="ES Edge Desk — Prop Combine Probability Simulator" />
+<meta property="og:description" content="Drag your win-rate and watch the live odds of passing a Topstep 50K Combine — Monte-Carlo expectancy, Sharpe, equity paths and the 2-vs-3 trades/day answer, recomputed in real time." />
+<meta property="og:site_name" content="TNX · Edge Desk" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ES Edge Desk — Prop Combine Simulator" />
+<meta name="twitter:description" content="Live Monte-Carlo pass-odds for a Topstep 50K Combine. Drag the win-rate, see the real probability." />
+<style>
+  :root{
+    --bg:#07070b; --panel:#13131c; --panel2:#1a1a26; --line:#272834;
+    --text:#F3F0EC; --dim:#9aa0ad; --dim2:#5b6170;
+    --gold:#F0B429; --goldsoft:#5a4a17;
+    --green:#3FB950; --red:#F2666B; --blue:#5AA9E6;
+    --brand:#E11D2A; --brand2:#ff3b4e; --brandglow:rgba(225,29,42,.5);
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+     radial-gradient(70% 40% at 50% -5%, rgba(225,29,42,.12), transparent 60%),
+     radial-gradient(50% 35% at 85% 8%, rgba(240,180,41,.07), transparent 60%),
+     var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{padding:0 20px 80px;max-width:1180px;margin:0 auto;font-size:15px;line-height:1.5;background-attachment:fixed}
+
+  /* brand bar */
+  .navbar{display:flex;align-items:center;justify-content:space-between;padding:20px 2px 0}
+  .navbar .home{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--dim);
+     border:1px solid var(--line);padding:8px 14px;border-radius:30px;text-decoration:none;transition:.2s}
+  .navbar .home:hover{color:var(--gold);border-color:var(--gold)}
+  .navbar .brand{font-family:var(--mono);font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--brand2);
+     display:flex;align-items:center;gap:9px}
+  .navbar .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 12px 2px var(--brandglow)}
+  a{color:var(--gold)}
+  h1{font-size:25px;font-weight:650;letter-spacing:-.02em;margin:0}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+  .sub{color:var(--dim);font-size:14px;margin:10px 0 0;max-width:760px}
+  .flag{margin-top:18px;background:linear-gradient(180deg,#1c1708,#15120a);border:1px solid var(--goldsoft);
+        border-radius:10px;padding:13px 16px;font-size:13.5px;color:#e9d9a6}
+  .flag b{color:var(--gold)}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px;margin-top:24px;align-items:start}
+  .controls{position:sticky;top:14px}
+  @media(max-width:880px){
+    .grid{grid-template-columns:1fr}
+    .controls{position:static;top:auto}   /* don't trap the panel on screen on mobile */
+  }
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .panel h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 14px;font-weight:600;font-family:var(--mono)}
+  .ctl{margin-bottom:17px}
+  .ctl:last-child{margin-bottom:0}
+  .ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--dim);margin-bottom:7px}
+  .ctl label .val{font-family:var(--mono);color:var(--text);font-size:14px}
+  .ctl label .val b{color:var(--gold)}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:4px;background:var(--line);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+     background:var(--gold);border:3px solid var(--bg);cursor:pointer;box-shadow:0 0 0 1px var(--gold)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--gold);border:3px solid var(--bg);cursor:pointer}
+  input[type=number]{width:78px;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+     font-family:var(--mono);font-size:13px;padding:5px 7px;border-radius:7px;text-align:right}
+  .row2{display:flex;gap:10px;flex-wrap:wrap}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+  .seg button{flex:1;background:none;border:none;color:var(--dim);font-family:var(--mono);font-size:13px;
+     padding:7px 10px;border-radius:6px;cursor:pointer;transition:.12s}
+  .seg button.on{background:var(--gold);color:#1a1305;font-weight:650}
+  .tog{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--dim);padding:6px 0}
+  .switch{position:relative;width:38px;height:22px;flex:none}
+  .switch input{opacity:0;width:0;height:0}
+  .slider-t{position:absolute;inset:0;background:var(--line);border-radius:22px;transition:.15s;cursor:pointer}
+  .slider-t:before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:var(--dim);border-radius:50%;transition:.15s}
+  .switch input:checked + .slider-t{background:var(--goldsoft)}
+  .switch input:checked + .slider-t:before{transform:translateX(16px);background:var(--gold)}
+  .divider{height:1px;background:var(--line);margin:16px 0}
+  small.hint{color:var(--dim2);font-size:11.5px;display:block;margin-top:5px;line-height:1.45}
+
+  /* KPI hero */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 15px}
+  .kpi .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-family:var(--mono)}
+  .kpi .v{font-family:var(--mono);font-size:26px;font-weight:650;margin-top:6px;letter-spacing:-.01em}
+  .kpi .v.sm{font-size:21px}
+  .kpi .note{font-size:11.5px;color:var(--dim2);margin-top:4px;font-family:var(--mono)}
+  .pos{color:var(--green)} .neg{color:var(--red)} .gold{color:var(--gold)} .blue{color:var(--blue)}
+
+  .bigprob{background:linear-gradient(135deg,#12161d,#191f2b);border:1px solid var(--line);border-radius:14px;
+     padding:20px;margin-top:18px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+  .bigprob .dial{flex:none}
+  .bigprob .verdict{flex:1;min-width:240px}
+  .bigprob .verdict .lead{font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .bigprob .verdict p{margin:8px 0 0;color:var(--dim);font-size:13.5px}
+
+  canvas{display:block;width:100%;border-radius:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:18px}
+  .card h3{margin:0 0 4px;font-size:15px;font-weight:600}
+  .card .cap{color:var(--dim);font-size:12.5px;margin:0 0 14px}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:right;padding:10px 8px;border-bottom:1px solid var(--line);font-family:var(--mono)}
+  th:first-child,td:first-child{text-align:left;font-family:var(--sans);color:var(--dim)}
+  thead th{color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+  tbody tr:last-child td{border-bottom:none}
+  .winner{color:var(--gold);font-weight:650}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--dim);font-family:var(--mono);margin-top:10px}
+  .legend i{display:inline-block;width:11px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:13px;
+     padding:9px 14px;border-radius:9px;cursor:pointer;transition:.12s}
+  .btn:hover{border-color:var(--gold);color:var(--gold)}
+  .btn.primary{background:var(--gold);color:#1a1305;border-color:var(--gold);font-weight:650}
+  .answers{font-size:14px;line-height:1.65}
+  .answers li{margin-bottom:9px}
+  .answers b{color:var(--gold)}
+  footer{margin-top:34px;color:var(--dim2);font-size:12px;line-height:1.6}
+  footer b{color:var(--dim)}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--dim);border:1px solid var(--line);
+     border-radius:6px;padding:2px 7px;margin-right:6px}
+
+  /* instrument selector */
+  .instrSeg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:6px}
+  .instrSeg button{flex:1;background:none;border:none;color:var(--dim);font-family:var(--mono);cursor:pointer;
+     padding:11px 8px;border-radius:9px;transition:.15s;text-align:center;line-height:1.25}
+  .instrSeg button .big{font-size:16px;font-weight:700;display:block}
+  .instrSeg button .sm{font-size:10.5px;color:var(--dim2);display:block;margin-top:2px}
+  .instrSeg button.on{background:linear-gradient(135deg,var(--brand),#a30f1a);color:#fff;box-shadow:0 8px 24px -10px var(--brandglow)}
+  .instrSeg button.on .sm{color:rgba(255,255,255,.8)}
+  .savebtn{background:linear-gradient(135deg,var(--gold),#c98f12);border:none;color:#1a1305;font-family:var(--mono);
+     font-size:13px;font-weight:650;padding:11px 14px;border-radius:9px;cursor:pointer;width:100%;transition:.18s}
+  .savebtn:hover{transform:translateY(-1px);box-shadow:0 10px 26px -12px var(--goldglow,rgba(240,180,41,.6))}
+  .saveNote{font-family:var(--mono);font-size:11.5px;color:var(--dim2);margin-top:8px;text-align:center}
+</style>
+</head>
+<body>
+
+  <div class="navbar">
+    <div class="brand"><span class="dot"></span> TNX · RISK DESK</div>
+    <a class="home" href="index.html">← HOME</a>
+  </div>
+
+  <div class="eyebrow" style="margin-top:22px"><span id="instrEyebrow">ES</span> · TOPSTEP 50K · Monte-Carlo Risk Desk</div>
+  <h1>How many trades, what win-rate, and what are the real odds?</h1>
+  <p class="sub">Drag the win-rate slider. Every number below — expectancy, Sharpe, and the probability of banking the
+  <span class="gold">$3,000</span> target before hitting the <span class="neg">−$2,000</span> trailing limit — is recomputed live from
+  thousands of simulated Combine attempts using your exact trade-management rules.</p>
+
+  <div class="flag">
+    <b>Tick value matters.</b> &nbsp;① <span id="flagTick"><b>ES = $12.50/tick</b>, so a 16-tick stop risks <b>$200</b></span> — dollars are tied to ticks, so switching to <b>NQ ($5/tick)</b> rescales every figure automatically. Pick whichever you actually trade.
+    &nbsp;② A real Topstep 50K Combine also has a <b>$1,000 daily-loss limit</b> and a <b>50% consistency rule</b> (best day &lt; half of total profit). Both are on by default because they change the 2-vs-3 answer.
+  </div>
+
+  <div class="grid">
+    <!-- ============ CONTROLS ============ -->
+    <div class="panel controls">
+      <h2>Instrument</h2>
+      <div class="instrSeg" id="instrSeg">
+        <button data-i="ES" class="on"><span class="big">ES</span><span class="sm">$12.50 / tick</span></button>
+        <button data-i="NQ"><span class="big">NQ</span><span class="sm">$5.00 / tick</span></button>
+      </div>
+      <small class="hint" style="margin-bottom:16px;display:block">Pick the contract you trade. Every dollar figure below is tied to its tick value — <b id="instrName">E-mini S&amp;P 500</b>.</small>
+
+      <div class="divider"></div>
+      <h2 style="margin-top:0">Your Edge</h2>
+
+      <div class="ctl">
+        <label>Win rate <span class="val"><b id="wrV">45</b>%</span></label>
+        <input type="range" id="wr" min="20" max="80" value="45" step="1">
+        <small class="hint">A "win" = price reached +15 ticks and the trail activated. Below the break-even line this is a losing system no matter how many trades you take.</small>
+      </div>
+
+      <div class="ctl">
+        <label>Stop loss <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span></span></label>
+        <input type="range" id="sl" min="8" max="24" value="16" step="1">
+      </div>
+
+      <div class="ctl">
+        <label>Runner winner <span class="val"><b id="bwV">28</b> ticks · <span id="bwD">$350</span></span></label>
+        <input type="range" id="bw" min="10" max="60" value="28" step="1">
+        <small class="hint">Your two winner types: a <b>scratch win at +7 ticks</b> (trail hit right after activation) and a <b>runner</b> of this size when the trend keeps going.</small>
+      </div>
+
+      <div class="ctl">
+        <label>Share of wins that are scratch (+7) <span class="val"><b id="psV">50</b>%</span></label>
+        <input type="range" id="ps" min="0" max="90" value="50" step="5">
+      </div>
+
+      <div class="divider"></div>
+      <h2 style="margin-top:0">Plan</h2>
+      <div class="ctl">
+        <label>Trades per day (main panel)</label>
+        <div class="seg" id="ndSeg">
+          <button data-n="1">1</button><button data-n="2" class="on">2</button>
+          <button data-n="3">3</button><button data-n="4">4</button>
+        </div>
+      </div>
+
+      <div class="row2" style="margin-bottom:6px">
+        <div style="flex:1"><label style="font-size:13px;color:var(--dim);display:block;margin-bottom:5px">Profit target</label>
+          <input type="number" id="tgt" value="3000" step="250"></div>
+        <div style="flex:1"><label style="font-size:13px;color:var(--dim);display:block;margin-bottom:5px">Max loss</label>
+          <input type="number" id="ml" value="2000" step="250"></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="tog">Trailing max-loss limit
+        <label class="switch"><input type="checkbox" id="trail" checked><span class="slider-t"></span></label></div>
+      <div class="tog">$1,000 daily-loss limit
+        <label class="switch"><input type="checkbox" id="dll" checked><span class="slider-t"></span></label></div>
+      <div class="tog">50% consistency rule
+        <label class="switch"><input type="checkbox" id="cons" checked><span class="slider-t"></span></label></div>
+
+      <div class="divider"></div>
+      <button class="btn primary" id="solve" style="width:100%">Solve: win-rate needed for 90% pass</button>
+      <div id="solveOut" style="font-family:var(--mono);font-size:12.5px;color:var(--dim);margin-top:9px;line-height:1.5"></div>
+
+      <div class="divider"></div>
+      <button class="savebtn" id="save">⬇ Save my results (PNG)</button>
+      <div class="saveNote">Downloads a branded summary card of your current setup &amp; odds.</div>
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div>
+      <div class="kpis">
+        <div class="kpi"><div class="k">Expectancy / trade</div><div class="v" id="expV">—</div><div class="note" id="expN"></div></div>
+        <div class="kpi"><div class="k">Reward : Risk</div><div class="v sm" id="rrV">—</div><div class="note" id="rrN"></div></div>
+        <div class="kpi"><div class="k">Break-even WR</div><div class="v sm" id="beV">—</div><div class="note">you are <span id="beN"></span></div></div>
+        <div class="kpi"><div class="k">Sharpe / day</div><div class="v sm" id="shV">—</div><div class="note" id="shN"></div></div>
+      </div>
+
+      <div class="bigprob">
+        <canvas class="dial" id="dial" width="150" height="150" style="width:150px;height:150px"></canvas>
+        <div class="verdict">
+          <div class="lead" id="verdLead">Running simulation…</div>
+          <p id="verdBody"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Sample equity paths</h3>
+        <p class="cap">14 simulated attempts at your current settings, <b id="ecN">2</b> trades/day. Green = hit target, red = hit the floor.</p>
+        <canvas id="eq" width="820" height="300"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--green)"></i>passed</span>
+          <span><i style="background:var(--red)"></i>failed</span>
+          <span><i style="background:var(--green);opacity:.9"></i>+$<span id="tgtLeg">3000</span> target</span>
+          <span><i style="background:var(--red);opacity:.9"></i>trailing floor</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>2 vs 3 trades per day — head to head</h3>
+        <p class="cap">Same edge, same rules. Notice what actually changes when you add a trade.</p>
+        <table id="cmp">
+          <thead><tr><th>Metric</th><th>1/day</th><th>2/day</th><th>3/day</th><th>4/day</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <small class="hint" style="margin-top:12px">Under fixed dollar barriers, grouping trades into days barely moves <b>whether</b> you pass — that's set by your edge. It mostly changes <b>how fast</b> you resolve and your daily Sharpe. More trades only helps if the edge is positive; if it's negative, more trades just fail you sooner.</small>
+      </div>
+
+      <div class="card">
+        <h3>Days to pass</h3>
+        <p class="cap">Distribution of trading days to reach the target, among attempts that passed (<b id="hN">2</b>/day).</p>
+        <canvas id="hist" width="820" height="200"></canvas>
+        <div id="histStat" style="font-family:var(--mono);font-size:13px;color:var(--dim);margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Direct answers to what you asked</h3>
+        <ul class="answers" id="answers"></ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div style="margin-bottom:8px">
+      <span class="tag">ES = $12.50 / tick · $50 / pt</span><span class="tag">NQ = $5.00 / tick · $20 / pt</span>
+      <span class="tag">Topstep 50K: $3k target · $2k trailing MLL · $1k DLL · 50% consistency</span>
+    </div>
+    <b>Model & assumptions.</b> Each trade is independent: a loss at your stop, a +7 scratch win, or a runner win, with the
+    probabilities you set. P&amp;L is tracked from $0. The trailing limit follows your end-of-day peak and locks at break-even
+    once you're up the drawdown amount (Topstep's end-of-day trailing MLL). The daily-loss limit stops the day; the consistency
+    rule blocks a "pass" until your best day is ≤ 50% of total profit. ~2,500 simulations per update (20,000 on Solve), capped at 250 days.
+    This models a <b>mechanical, fixed-edge</b> strategy — real markets have streaks, regime shifts, slippage, and execution error that make
+    outcomes worse than a clean i.i.d. model. Treat it as a planning tool, not a promise. Specs verified vs CME, NinjaTrader, and Topstep's
+    2026 help-center / rules pages. Not financial advice.
+  </footer>
+
+<script>
+const $=id=>document.getElementById(id);
+const INSTR={
+  ES:{tick:12.5, perPt:50, name:'E-mini S&P 500', label:'ES'},
+  NQ:{tick:5.0,  perPt:20, name:'E-mini Nasdaq-100', label:'NQ'}
+};
+let INST='ES';
+let TICK=INSTR[INST].tick;
+let N=2;
+let lastMain=null, lastA=null;   // cache for the Save snapshot
+
+const el={
+  wr:$('wr'),sl:$('sl'),bw:$('bw'),ps:$('ps'),tgt:$('tgt'),ml:$('ml'),
+  trail:$('trail'),dll:$('dll'),cons:$('cons')
+};
+
+function cfg(){
+  const p=+el.wr.value/100, stopT=+el.sl.value, bigT=+el.bw.value, pSmall=+el.ps.value/100;
+  return {
+    p, pSmall,
+    loss: stopT*TICK, small: 7*TICK, big: bigT*TICK,
+    stopT, bigT,
+    target:+el.tgt.value, maxLoss:+el.ml.value,
+    trailing:el.trail.checked, dllOn:el.dll.checked, dll:1000,
+    consOn:el.cons.checked, consFrac:0.5
+  };
+}
+
+/* ---- analytic stats ---- */
+function analytics(c){
+  const pL=1-c.p, pS=c.p*c.pSmall, pB=c.p*(1-c.pSmall);
+  const E=pS*c.small+pB*c.big-pL*c.loss;
+  const EX2=pS*c.small*c.small+pB*c.big*c.big+pL*c.loss*c.loss;
+  const sd=Math.sqrt(Math.max(EX2-E*E,1e-9));
+  const meanWin=c.pSmall*c.small+(1-c.pSmall)*c.big;
+  const rr=meanWin/c.loss;
+  const be=c.loss/(meanWin+c.loss);
+  const sharpeTrade=E/sd;
+  return {E,sd,rr,be,sharpeTrade,meanWin};
+}
+
+/* ---- one Monte-Carlo run for a given trades/day ---- */
+function runSim(c,n,M,capDays,wantPaths){
+  let pass=0,fail=0,timeout=0; const days=[]; const paths=[];
+  const pL=1-c.p, pSmallAbs=c.pSmall; // nested draw
+  for(let i=0;i<M;i++){
+    let pnl=0,peak=0,best=-1e9,day=0,status='timeout';
+    const path=(wantPaths&&i<14)?[0]:null;
+    while(day<capDays){
+      day++;
+      let dayPnL=0;
+      for(let t=0;t<n;t++){
+        let o;
+        if(Math.random()<pL) o=-c.loss;
+        else o=(Math.random()<pSmallAbs)?c.small:c.big;
+        dayPnL+=o;
+        if(c.dllOn && dayPnL<=-c.dll) break;
+      }
+      pnl+=dayPnL;
+      if(dayPnL>best) best=dayPnL;
+      if(path) path.push(pnl);
+      const floor=c.trailing?Math.min(peak-c.maxLoss,0):-c.maxLoss;
+      if(pnl<=floor){status='fail';break;}
+      if(pnl>peak) peak=pnl;
+      if(pnl>=c.target){
+        if(c.consOn && best>c.consFrac*pnl){ /* keep grinding */ }
+        else {status='pass';break;}
+      }
+    }
+    if(status==='pass'){pass++;days.push(day);}
+    else if(status==='fail') fail++; else timeout++;
+    if(path) paths.push({path,status});
+  }
+  days.sort((a,b)=>a-b);
+  const med=days.length?days[Math.floor(days.length/2)]:null;
+  const mean=days.length?days.reduce((a,b)=>a+b,0)/days.length:null;
+  return {pass:pass/M,fail:fail/M,timeout:timeout/M,med,mean,days,paths,M};
+}
+
+/* ---- renderers ---- */
+function fmt$(v){const s=v<0?'-':'';return s+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0});}
+
+function drawDial(pct){
+  const cv=$('dial'),x=cv.getContext('2d'),W=150,cx=75,cy=75,r=58;
+  x.clearRect(0,0,W,W);
+  x.lineWidth=13;x.lineCap='round';
+  x.strokeStyle='#222a36';x.beginPath();x.arc(cx,cy,r,-Math.PI/2,1.5*Math.PI);x.stroke();
+  const col=pct>=.7?'#3FB950':pct>=.45?'#F0B429':'#F2666B';
+  x.strokeStyle=col;x.beginPath();x.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+2*Math.PI*pct);x.stroke();
+  x.fillStyle='#E7ECF3';x.font='600 30px '+getComputedStyle(document.body).getPropertyValue('--mono');
+  x.textAlign='center';x.textBaseline='middle';x.fillText(Math.round(pct*100)+'%',cx,cy-4);
+  x.fillStyle='#8C99AB';x.font='11px '+getComputedStyle(document.body).getPropertyValue('--mono');
+  x.fillText('PASS',cx,cy+18);
+}
+
+function drawEquity(c,paths){
+  const cv=$('eq'),x=cv.getContext('2d');
+  const W=cv.width=cv.clientWidth*2, H=cv.height=600; x.scale(1,1);
+  cv.style.height='300px';
+  x.clearRect(0,0,W,H);
+  const padL=70,padR=20,padT=18,padB=24;
+  let maxD=1,maxV=c.target*1.15,minV=-c.maxLoss*1.15;
+  paths.forEach(p=>{maxD=Math.max(maxD,p.path.length-1);p.path.forEach(v=>{maxV=Math.max(maxV,v);minV=Math.min(minV,v)})});
+  const X=d=>padL+(W-padL-padR)*(d/maxD);
+  const Y=v=>padT+(H-padT-padB)*(1-(v-minV)/(maxV-minV));
+  // grid + barriers
+  x.font='20px '+getComputedStyle(document.body).getPropertyValue('--mono');x.textBaseline='middle';
+  function hline(v,col,dash,lbl){x.strokeStyle=col;x.setLineDash(dash);x.lineWidth=2;x.beginPath();x.moveTo(padL,Y(v));x.lineTo(W-padR,Y(v));x.stroke();x.setLineDash([]);x.fillStyle=col;x.textAlign='right';x.fillText(lbl,padL-8,Y(v));}
+  hline(0,'#3a4456',[],'$0');
+  hline(c.target,'rgba(63,185,80,.55)',[8,6],'+'+fmt$(c.target));
+  hline(-c.maxLoss,'rgba(242,102,107,.55)',[8,6],fmt$(-c.maxLoss));
+  // paths
+  paths.forEach(p=>{
+    x.strokeStyle=p.status==='pass'?'rgba(63,185,80,.85)':p.status==='fail'?'rgba(242,102,107,.8)':'rgba(140,153,171,.55)';
+    x.lineWidth=2.2;x.beginPath();
+    p.path.forEach((v,d)=>{const px=X(d),py=Y(v);d?x.lineTo(px,py):x.moveTo(px,py);});
+    x.stroke();
+  });
+  x.fillStyle='#5E6B7E';x.textAlign='left';x.fillText('day →',padL,H-10);
+}
+
+function drawHist(res){
+  const cv=$('hist'),x=cv.getContext('2d');
+  const W=cv.width=cv.clientWidth*2,H=cv.height=400; cv.style.height='200px';
+  x.clearRect(0,0,W,H);
+  const d=res.days; const stat=$('histStat');
+  if(!d.length){x.fillStyle='#8C99AB';x.font='22px '+getComputedStyle(document.body).getPropertyValue('--mono');x.textAlign='center';x.fillText('No passes at these settings',W/2,H/2);stat.textContent='';return;}
+  const maxD=d[d.length-1], nb=Math.min(24,Math.max(8,maxD)), bw=maxD/nb;
+  const bins=new Array(nb).fill(0);
+  d.forEach(v=>{let b=Math.min(nb-1,Math.floor((v-1)/bw));if(b<0)b=0;bins[b]++;});
+  const mx=Math.max(...bins),padB=34,padT=14,padL=10;
+  const w=(W-padL*2)/nb;
+  bins.forEach((cnt,i)=>{
+    const h=(H-padB-padT)*(cnt/mx);
+    x.fillStyle=i/nb<.34?'#3FB950':i/nb<.67?'#F0B429':'#F2666B';
+    x.globalAlpha=.85;x.fillRect(padL+i*w+2,H-padB-h,w-4,h);x.globalAlpha=1;
+  });
+  x.fillStyle='#5E6B7E';x.font='19px '+getComputedStyle(document.body).getPropertyValue('--mono');x.textAlign='center';
+  for(let i=0;i<=nb;i+=Math.ceil(nb/6)){x.fillText(Math.round(i*bw),padL+i*w,H-12);}
+  stat.innerHTML=`median <b style="color:var(--gold)">${res.med}</b> days &nbsp;·&nbsp; mean <b style="color:var(--gold)">${res.mean?res.mean.toFixed(1):'—'}</b> days &nbsp;·&nbsp; fastest ${d[0]} · slowest ${d[d.length-1]}`;
+}
+
+/* ---- main update ---- */
+let raf=null;
+function update(){
+  const c=cfg();
+  // sync labels
+  $('wrV').textContent=el.wr.value;
+  $('slV').textContent=el.sl.value; $('slD').textContent=fmt$(c.loss);
+  $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.loss)}</b>`;
+  $('bwV').textContent=el.bw.value; $('bwD').textContent=fmt$(c.big);
+  $('psV').textContent=el.ps.value;
+  $('tgtLeg').textContent=(+el.tgt.value).toLocaleString();
+  $('ecN').textContent=N; $('hN').textContent=N;
+
+  const a=analytics(c);
+  $('expV').textContent=fmt$(a.E); $('expV').className='v '+(a.E>=0?'pos':'neg');
+  $('expN').textContent=(a.E>=0?'+':'')+(a.E/TICK).toFixed(1)+' ticks/trade';
+  $('rrV').textContent=a.rr.toFixed(2)+' : 1'; $('rrN').textContent='avg win '+(a.meanWin/TICK).toFixed(0)+'t';
+  $('beV').textContent=(a.be*100).toFixed(1)+'%';
+  const above=c.p>=a.be;
+  $('beN').innerHTML=above?'<span class="pos">above it ✓</span>':'<span class="neg">below it ✗</span>';
+  const shDay=a.sharpeTrade*Math.sqrt(N);
+  $('shV').textContent=shDay.toFixed(2); $('shV').className='v sm '+(shDay>=0?'pos':'neg');
+  $('shN').textContent='per-trade '+a.sharpeTrade.toFixed(3);
+
+  // main sim
+  const main=runSim(c,N,2500,250,true);
+  lastMain=main; lastA=a;
+  drawDial(main.pass);
+  drawEquity(c,main.paths);
+  drawHist(main);
+
+  // verdict
+  const lead=$('verdLead'),body=$('verdBody');
+  if(a.E<0){
+    lead.innerHTML='<span class="neg">Negative edge — this loses money.</span>';
+    body.innerHTML=`At ${(c.p*100).toFixed(0)}% you're below the ${ (a.be*100).toFixed(1)}% break-even. Pass odds are ~${(main.pass*100).toFixed(0)}%, and adding trades only speeds up the loss. Raise win rate to ${(a.be*100).toFixed(1)}%+ or grow the runner before risking real evaluation fees.`;
+  } else {
+    const tone=main.pass>=.7?'pos':main.pass>=.45?'gold':'neg';
+    lead.innerHTML=`<span class="${tone}">${(main.pass*100).toFixed(0)}% chance to pass</span> at ${N}/day`;
+    body.innerHTML=`Edge is +${fmt$(a.E)}/trade (${(a.E/TICK).toFixed(1)} ticks). Typical passing run takes <b>${main.med??'—'} days</b>. Failing ${ (main.fail*100).toFixed(0)}%, still grinding ${(main.timeout*100).toFixed(0)}% after 250 days.`;
+  }
+
+  // comparison table
+  const tb=$('cmp').querySelector('tbody');
+  const cols=[1,2,3,4].map(n=>({n,r:runSim(c,n,2000,250,false),s:a.sharpeTrade*Math.sqrt(n)}));
+  const bestPass=Math.max(...cols.map(x=>x.r.pass));
+  const rows=[
+    ['Pass probability',cols.map(x=>(x.r.pass*100).toFixed(0)+'%'),cols.map(x=>x.r.pass===bestPass)],
+    ['Fail probability',cols.map(x=>(x.r.fail*100).toFixed(0)+'%'),null],
+    ['Median days to pass',cols.map(x=>x.r.med??'—'),null],
+    ['Daily Sharpe',cols.map(x=>x.s.toFixed(2)),cols.map((x,i)=>i===cols.length-1)],
+    ['Daily risk if all stop out',cols.map(x=>fmt$(-Math.min(x.n*c.loss, c.dllOn?c.dll:1e9))),null],
+  ];
+  tb.innerHTML=rows.map(([lab,vals,hl])=>`<tr><td>${lab}</td>${vals.map((v,i)=>`<td class="${hl&&hl[i]?'winner':''}">${v}</td>`).join('')}</tr>`).join('');
+
+  buildAnswers(c,a,cols,main);
+}
+
+function buildAnswers(c,a,cols,main){
+  const c2=cols[1].r, c3=cols[2].r;
+  const better = c3.pass>c2.pass+0.03 ? '3' : c2.pass>c3.pass+0.03 ? '2' : 'tie';
+  const ul=$('answers');
+  const items=[];
+  items.push(`<li><b>Win rate to be profitable:</b> you need to clear the break-even of <b>${(a.be*100).toFixed(1)}%</b> for this stop and winner mix. Below that, expectancy is negative and no trade count saves you.</li>`);
+  items.push(`<li><b>2 vs 3 trades:</b> ${
+     better==='tie'
+      ? `near-identical pass odds (${(c2.pass*100).toFixed(0)}% vs ${(c3.pass*100).toFixed(0)}%) — the count mostly changes <i>speed</i> (median ${c2.med??'—'} vs ${c3.med??'—'} days) and daily Sharpe (${(a.sharpeTrade*Math.sqrt(2)).toFixed(2)} vs ${(a.sharpeTrade*Math.sqrt(3)).toFixed(2)}). With a positive edge, 3/day banks faster; with the consistency rule on, 2/day is safer.`
+      : `${better}/day currently wins on pass odds (${(c2.pass*100).toFixed(0)}% vs ${(c3.pass*100).toFixed(0)}%). ${a.E>=0?'Because your edge is positive, more trades compound it faster — but watch the consistency rule and DLL.':'Because your edge is negative, fewer trades lose slower.'}`
+   }</li>`);
+  items.push(`<li><b>Best plan for the goal:</b> ${a.E<0?'fix the edge first — at a negative expectancy every plan has a coin-flip-or-worse pass rate.':`run <b>${a.sharpeTrade*Math.sqrt(2) <= a.sharpeTrade*Math.sqrt(3) && c.consOn ? '2' : (c3.pass>=c2.pass?'3':'2')}/day</b>; at your settings the simulator passes ${(main.pass*100).toFixed(0)}% of the time in a median of ${main.med??'—'} days.`}</li>`);
+  items.push(`<li><b>Days that pass:</b> typically <b>${main.med??'—'}</b> trading days when you make it (mean ${main.mean?main.mean.toFixed(1):'—'}). Topstep has no time limit, but the trailing floor and consistency rule are what end most attempts.</li>`);
+  items.push(`<li><b>Sharpe & expectancy:</b> per-trade Sharpe is <b>${a.sharpeTrade.toFixed(3)}</b>; it scales by √(trades) per day, so more trades raise <i>daily</i> Sharpe but not your underlying edge. Expectancy is fixed per trade at <b>${fmt$(a.E)}</b>.</li>`);
+  ul.innerHTML=items.join('');
+}
+
+/* ---- solver ---- */
+$('solve').onclick=()=>{
+  const base=cfg(); const out=$('solveOut'); out.textContent='Scanning…';
+  setTimeout(()=>{
+    let found2=null,found3=null;
+    for(let pr=30;pr<=80;pr++){
+      const c={...base,p:pr/100};
+      if(found2===null && runSim(c,2,2000,250,false).pass>=0.9) found2=pr;
+      if(found3===null && runSim(c,3,2000,250,false).pass>=0.9) found3=pr;
+      if(found2!==null&&found3!==null) break;
+    }
+    out.innerHTML=`For <b style="color:var(--gold)">90% pass</b>: need ≈ <b style="color:var(--gold)">${found2?found2+'%':'>80%'}</b> WR at 2/day, <b style="color:var(--gold)">${found3?found3+'%':'>80%'}</b> at 3/day. <span style="color:var(--dim2)">(at your current stop/winner mix)</span>`;
+  },20);
+};
+
+/* ---- instrument switch ---- */
+function setInstrument(code){
+  if(!INSTR[code]) return;
+  INST=code; TICK=INSTR[code].tick;
+  document.querySelectorAll('#instrSeg button').forEach(b=>b.classList.toggle('on',b.dataset.i===code));
+  $('instrEyebrow').textContent=code;
+  $('instrName').textContent=INSTR[code].name;
+  const stopT=+el.sl.value;
+  $('flagTick').innerHTML=`<b>${code} = ${fmt$(INSTR[code].tick)}/tick</b>, so a ${stopT}-tick stop risks <b>${fmt$(stopT*INSTR[code].tick)}</b>`;
+  try{localStorage.setItem('tnx_instr',code);}catch(e){}
+  update();
+}
+document.querySelectorAll('#instrSeg button').forEach(b=>b.onclick=()=>setInstrument(b.dataset.i));
+
+/* ---- save results as a branded PNG card ---- */
+$('save').onclick=()=>{
+  if(!lastMain||!lastA) return;
+  const c=cfg(), a=lastA, m=lastMain;
+  const S=2, W=900*S, H=620*S, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const x=cv.getContext('2d'); x.scale(S,S);
+  const w=900,h=620;
+  // bg
+  const bg=x.createLinearGradient(0,0,0,h); bg.addColorStop(0,'#0c0c14'); bg.addColorStop(1,'#07070b');
+  x.fillStyle=bg; x.fillRect(0,0,w,h);
+  // glows
+  const rg=x.createRadialGradient(w*0.2,-40,0,w*0.2,-40,420); rg.addColorStop(0,'rgba(225,29,42,.28)'); rg.addColorStop(1,'rgba(225,29,42,0)');
+  x.fillStyle=rg; x.fillRect(0,0,w,h);
+  const gg=x.createRadialGradient(w*0.85,h+40,0,w*0.85,h+40,420); gg.addColorStop(0,'rgba(240,180,41,.20)'); gg.addColorStop(1,'rgba(240,180,41,0)');
+  x.fillStyle=gg; x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(255,255,255,.08)'; x.lineWidth=1.5; x.strokeRect(14,14,w-28,h-28);
+  const MONO='600 PX ui-monospace,Menlo,Consolas,monospace';
+  const f=(px,wt)=>`${wt||600} ${px}px ui-monospace,Menlo,Consolas,monospace`;
+  // header
+  x.fillStyle='#E11D2A'; x.font=f(13); x.textBaseline='top';
+  x.fillText('● TNX · TRADERS', 40, 40);
+  x.fillStyle='#9aa0ad'; x.textAlign='right'; x.fillText(new Date().toLocaleDateString(), w-40, 40); x.textAlign='left';
+  x.fillStyle='#F3F0EC'; x.font=f(30,800); x.fillText('Risk Desk — '+INSTR[INST].label+' Combine Snapshot', 40, 70);
+  x.fillStyle='#9aa0ad'; x.font=f(14,500);
+  x.fillText(`Topstep 50K · ${fmt$(c.target)} target / ${fmt$(c.maxLoss)} trailing · ${INST} @ ${fmt$(INSTR[INST].tick)}/tick`, 40, 110);
+  // big pass %
+  const passPct=Math.round(m.pass*100);
+  const col=m.pass>=.7?'#3FB950':m.pass>=.45?'#F0B429':'#F2666B';
+  x.fillStyle=col; x.font=f(96,850); x.fillText(passPct+'%', 40, 150);
+  x.fillStyle='#9aa0ad'; x.font=f(15,600); x.fillText('PROBABILITY TO PASS  ·  '+N+' trades / day', 44, 268);
+  // stat grid
+  const stats=[
+    ['Win rate', (c.p*100).toFixed(0)+'%'],
+    ['Expectancy / trade', fmt$(a.E)],
+    ['Reward : Risk', a.rr.toFixed(2)+' : 1'],
+    ['Break-even WR', (a.be*100).toFixed(1)+'%'],
+    ['Daily Sharpe', (a.sharpeTrade*Math.sqrt(N)).toFixed(2)],
+    ['Median days to pass', (m.med??'—')+''],
+    ['Stop loss', el.sl.value+'t · '+fmt$(c.loss)],
+    ['Runner winner', el.bw.value+'t · '+fmt$(c.big)],
+  ];
+  let gx=40, gy=320, gw=(w-80-3*16)/4, gh=120;
+  stats.forEach((s,i)=>{
+    const cxp=gx+(i%4)*(gw+16), cyp=gy+Math.floor(i/4)*(gh+14);
+    x.fillStyle='rgba(255,255,255,.03)'; x.strokeStyle='rgba(255,255,255,.08)';
+    roundRect(x,cxp,cyp,gw,gh,12); x.fill(); x.stroke();
+    x.fillStyle='#9aa0ad'; x.font=f(12,600); x.fillText(s[0].toUpperCase(), cxp+16, cyp+18);
+    x.fillStyle='#F3F0EC'; x.font=f(26,700); x.fillText(s[1], cxp+16, cyp+50);
+  });
+  // footer
+  x.fillStyle='#5b6170'; x.font=f(12,500);
+  x.fillText('Monte-Carlo · ~2,500 sims · planning tool, not financial advice · tnxtrader.github.io', 40, h-40);
+  function roundRect(c,X,Y,W2,H2,r){c.beginPath();c.moveTo(X+r,Y);c.arcTo(X+W2,Y,X+W2,Y+H2,r);c.arcTo(X+W2,Y+H2,X,Y+H2,r);c.arcTo(X,Y+H2,X,Y,r);c.arcTo(X,Y,X+W2,Y,r);c.closePath();}
+  // download
+  const a2=document.createElement('a');
+  a2.download=`TNX_${INST}_combine_${(c.p*100).toFixed(0)}wr_${passPct}pct.png`;
+  a2.href=cv.toDataURL('image/png'); a2.click();
+};
+
+/* ---- wiring ---- */
+['wr','sl','bw','ps','tgt','ml'].forEach(id=>el[id].addEventListener('input',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);}));
+['trail','dll','cons'].forEach(id=>el[id].addEventListener('change',update));
+document.querySelectorAll('#ndSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#ndSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');N=+b.dataset.n;update();
+});
+window.addEventListener('resize',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);});
+
+// restore last-used instrument, then first render
+try{const saved=localStorage.getItem('tnx_instr'); if(saved&&INSTR[saved]) setInstrument(saved); else update();}
+catch(e){update();}
+</script>
+</body>
+</html>
