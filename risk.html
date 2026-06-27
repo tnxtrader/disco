@@ -171,7 +171,7 @@
       <div class="ctl">
         <label>Win rate <span class="val"><b id="wrV">45</b>%</span></label>
         <input type="range" id="wr" min="20" max="80" value="45" step="1">
-        <small class="hint">A "win" = price ran far enough to <b>arm your trail (+1.25R)</b>, so the trade gets trailed out in profit instead of hitting the stop. Below the break-even line this is a losing system no matter how many trades you take.</small>
+        <small class="hint">A "win" = price ran far enough to <b>arm your trail (+1.25R)</b>, so the trade closes in profit instead of hitting the stop. <span style="color:var(--dim2)">No idea what yours is? 40–45% is a realistic starting guess.</span></small>
       </div>
 
       <div class="ctl">
@@ -186,16 +186,22 @@
         <small class="hint" id="sizeHint"></small>
       </div>
 
-      <div class="ctl">
-        <label>Average runner <span class="val"><b id="bwV">28</b> ticks · <span id="bwD">$350</span></span></label>
-        <input type="range" id="bw" min="10" max="60" value="28" step="1">
-        <small class="hint">When the trend <b>keeps going</b> after your trail is armed, you ride it for about this many ticks before it trails you out. This is your <b>big</b> winner.</small>
+      <div class="flag" style="margin-top:0;font-size:12.5px;padding:11px 13px">
+        <b>No trades yet? You can't know the two sliders below.</b> They describe your <i>future</i> wins, which you only learn by trading. Just tap this and adjust later when you have real numbers:
+        <button class="btn" id="starter" style="margin-top:9px;width:100%">✓ Use safe starter assumptions</button>
       </div>
 
       <div class="ctl">
-        <label>Share of wins that only lock the minimum <span class="val"><b id="psV">50</b>%</span></label>
+        <label>How big is a <b>good</b> winner? <span class="val"><b id="bwV">28</b> ticks · <span id="bwD">$350</span></span></label>
+        <input type="range" id="bw" min="10" max="60" value="28" step="1">
+        <small class="hint">On the trades where the trend <b>keeps running</b>, how far you ride it before the trail stops you out. Bigger = your winners pay for more losers. <span style="color:var(--dim2)">Don't know? Leave it.</span></small>
+      </div>
+
+      <div class="ctl">
+        <label>How often is a win only <b>small</b>? <span class="val"><b id="psV">50</b>%</span></label>
         <input type="range" id="ps" min="0" max="90" value="50" step="5">
-        <small class="hint">Of all your winning trades, how many <b>just get trailed out at the minimum lock</b> (price stalls right after the trail arms) instead of turning into a full runner.</small>
+        <small class="hint">Out of every 10 wins, how many fizzle into the tiny min-lock instead of a big runner. <b>Higher = more weak wins.</b> <span style="color:var(--dim2)">Don't know? Leave it at 50%.</span></small>
+        <small class="hint" id="winMixHint" style="margin-top:7px;color:var(--text)"></small>
       </div>
 
       <div class="divider"></div>
@@ -488,6 +494,8 @@ function update(){
   $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.perContractRisk)}</b> per contract — at <b>${fmt$(c.riskUsd)}</b> risk that's ≈ ${fmtNum(c.contracts)} lot${c.contracts===1?'':'s'}`;
   $('bwV').textContent=el.bw.value; $('bwD').textContent=fmt$(c.big);
   $('psV').textContent=el.ps.value;
+  const nSmall=Math.round(c.pSmall*10), nBig=10-nSmall;
+  $('winMixHint').innerHTML=`In plain words: out of every <b>10 wins</b>, about <b>${nSmall}</b> are small (<span class="pos">+${c.lockT}t · ${fmt$(c.small)}</span>) and <b>${nBig}</b> are good runners (<span class="pos">+${c.bigT}t · ${fmt$(c.big)}</span>).`;
   $('tgtLeg').textContent=(+el.tgt.value).toLocaleString();
   $('ecN').textContent=N; $('hN').textContent=N;
 
@@ -631,6 +639,17 @@ function buildAnswers(c,a,cols,main){
   items.push(`<li><b>Sharpe & expectancy:</b> per-trade Sharpe is <b>${a.sharpeTrade.toFixed(3)}</b>; it scales by √(trades) per day, so more trades raise <i>daily</i> Sharpe but not your underlying edge. Expectancy is fixed per trade at <b>${fmt$(a.E)}</b>.</li>`);
   ul.innerHTML=items.join('');
 }
+
+/* ---- "I have no data" starter assumptions ---- */
+$('starter').onclick=()=>{
+  el.wr.value=45;          // realistic break-even-ish win rate for a new trader
+  el.sl.value=16;          // your 16-tick stop
+  el.bw.value=32;          // good winners ≈ 2R (twice your risk)
+  el.ps.value=50;          // assume half your wins are small, half run
+  update();
+  const b=$('starter'); b.textContent='✓ Starter assumptions loaded — tune as you learn'; b.style.borderColor='var(--gold)'; b.style.color='var(--gold)';
+  setTimeout(()=>{b.textContent='✓ Use safe starter assumptions';b.style.borderColor='';b.style.color='';},2600);
+};
 
 /* ---- solver ---- */
 $('solve').onclick=()=>{
