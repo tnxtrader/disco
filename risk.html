@@ -122,8 +122,8 @@
      border-radius:6px;padding:2px 7px;margin-right:6px}
 
   /* instrument selector */
-  .instrSeg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:6px}
-  .instrSeg button{flex:1;background:none;border:none;color:var(--dim);font-family:var(--mono);cursor:pointer;
+  .instrSeg{display:flex;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:6px}
+  .instrSeg button{flex:1 1 calc(50% - 4px);min-width:84px;background:none;border:none;color:var(--dim);font-family:var(--mono);cursor:pointer;
      padding:11px 8px;border-radius:9px;transition:.15s;text-align:center;line-height:1.25}
   .instrSeg button .big{font-size:16px;font-weight:700;display:block}
   .instrSeg button .sm{font-size:10.5px;color:var(--dim2);display:block;margin-top:2px}
@@ -159,7 +159,9 @@
       <h2>Instrument</h2>
       <div class="instrSeg" id="instrSeg">
         <button data-i="ES" class="on"><span class="big">ES</span><span class="sm">$12.50 / tick</span></button>
+        <button data-i="MES"><span class="big">MES</span><span class="sm">$1.25 / tick</span></button>
         <button data-i="NQ"><span class="big">NQ</span><span class="sm">$5.00 / tick</span></button>
+        <button data-i="MNQ"><span class="big">MNQ</span><span class="sm">$0.50 / tick</span></button>
       </div>
       <small class="hint" style="margin-bottom:16px;display:block">Pick the contract you trade. Every dollar figure below is tied to its tick value — <b id="instrName">E-mini S&amp;P 500</b>.</small>
 
@@ -169,23 +171,25 @@
       <div class="ctl">
         <label>Win rate <span class="val"><b id="wrV">45</b>%</span></label>
         <input type="range" id="wr" min="20" max="80" value="45" step="1">
-        <small class="hint">A "win" = price reached +15 ticks and the trail activated. Below the break-even line this is a losing system no matter how many trades you take.</small>
+        <small class="hint">A "win" = price ran far enough to <b>arm your trail (+1.25R)</b>, so the trade gets trailed out in profit instead of hitting the stop. Below the break-even line this is a losing system no matter how many trades you take.</small>
       </div>
 
       <div class="ctl">
-        <label>Stop loss <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span></span></label>
+        <label>Stop loss (your risk) <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span></span></label>
         <input type="range" id="sl" min="8" max="24" value="16" step="1">
+        <small class="hint" id="trailHint"></small>
       </div>
 
       <div class="ctl">
-        <label>Runner winner <span class="val"><b id="bwV">28</b> ticks · <span id="bwD">$350</span></span></label>
+        <label>Average runner <span class="val"><b id="bwV">28</b> ticks · <span id="bwD">$350</span></span></label>
         <input type="range" id="bw" min="10" max="60" value="28" step="1">
-        <small class="hint">Your two winner types: a <b>scratch win at +7 ticks</b> (trail hit right after activation) and a <b>runner</b> of this size when the trend keeps going.</small>
+        <small class="hint">When the trend <b>keeps going</b> after your trail is armed, you ride it for about this many ticks before it trails you out. This is your <b>big</b> winner.</small>
       </div>
 
       <div class="ctl">
-        <label>Share of wins that are scratch (+7) <span class="val"><b id="psV">50</b>%</span></label>
+        <label>Share of wins that only lock the minimum <span class="val"><b id="psV">50</b>%</span></label>
         <input type="range" id="ps" min="0" max="90" value="50" step="5">
+        <small class="hint">Of all your winning trades, how many <b>just get trailed out at the minimum lock</b> (price stalls right after the trail arms) instead of turning into a full runner.</small>
       </div>
 
       <div class="divider"></div>
@@ -240,6 +244,26 @@
       </div>
 
       <div class="card">
+        <h3>Your trading day — at this stop &amp; these settings</h3>
+        <p class="cap">What a single day looks like with a <b id="dayStop">16</b>-tick stop, trailing to <b id="dayTrail">8</b> ticks once you're +1.25R, taking <b id="dayN">2</b> trades/day.</p>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+          <div class="kpi"><div class="k">Average day</div><div class="v sm" id="dayAvgV">—</div><div class="note" id="dayAvgN"></div></div>
+          <div class="kpi"><div class="k">Best realistic day</div><div class="v sm pos" id="dayBestV">—</div><div class="note" id="dayBestN">all trades run</div></div>
+          <div class="kpi"><div class="k">Worst day</div><div class="v sm neg" id="dayWorstV">—</div><div class="note" id="dayWorstN"></div></div>
+        </div>
+        <small class="hint" id="dayLine" style="margin-top:12px"></small>
+
+        <div class="divider"></div>
+        <h3 style="margin:0 0 4px">Every way the day can go</h3>
+        <p class="cap">All possible end-of-day results for <b id="dayN2">2</b> trades, each with its real probability. Sorted best → worst. <span class="pos">Green days</span> <b id="scGreen">—</b> · <span class="gold">flat</span> <b id="scFlat">—</b> · <span class="neg">red days</span> <b id="scRed">—</b>.</p>
+        <table id="daySc">
+          <thead><tr><th>Day result</th><th>Day P&amp;L</th><th>Probability</th><th>Likelihood</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <small class="hint" style="margin-top:10px">Each trade is independent — a <b>loss</b> at your stop, a <b>min-lock</b> win, or a <b>runner</b>. Probabilities come straight from your win-rate and win-mix sliders and always sum to 100%. <span id="scDllNote"></span></small>
+      </div>
+
+      <div class="card">
         <h3>Sample equity paths</h3>
         <p class="cap">14 simulated attempts at your current settings, <b id="ecN">2</b> trades/day. Green = hit target, red = hit the floor.</p>
         <canvas id="eq" width="820" height="300"></canvas>
@@ -277,10 +301,11 @@
 
   <footer>
     <div style="margin-bottom:8px">
-      <span class="tag">ES = $12.50 / tick · $50 / pt</span><span class="tag">NQ = $5.00 / tick · $20 / pt</span>
+      <span class="tag">ES = $12.50/t · $50/pt</span><span class="tag">MES = $1.25/t · $5/pt</span><span class="tag">NQ = $5.00/t · $20/pt</span><span class="tag">MNQ = $0.50/t · $2/pt</span>
       <span class="tag">Topstep 50K: $3k target · $2k trailing MLL · $1k DLL · 50% consistency</span>
     </div>
-    <b>Model & assumptions.</b> Each trade is independent: a loss at your stop, a +7 scratch win, or a runner win, with the
+    <b>Model & assumptions.</b> Each trade is independent: a loss at your stop, a <b>minimum-lock win</b> (price stalls right after your
+    trail arms at 1.25R, leaving the stop half-a-stop behind), or a <b>runner win</b>, with the
     probabilities you set. P&amp;L is tracked from $0. The trailing limit follows your end-of-day peak and locks at break-even
     once you're up the drawdown amount (Topstep's end-of-day trailing MLL). The daily-loss limit stops the day; the consistency
     rule blocks a "pass" until your best day is ≤ 50% of total profit. ~2,500 simulations per update (20,000 on Solve), capped at 250 days.
@@ -292,8 +317,10 @@
 <script>
 const $=id=>document.getElementById(id);
 const INSTR={
-  ES:{tick:12.5, perPt:50, name:'E-mini S&P 500', label:'ES'},
-  NQ:{tick:5.0,  perPt:20, name:'E-mini Nasdaq-100', label:'NQ'}
+  ES :{tick:12.5, perPt:50, name:'E-mini S&P 500',        label:'ES'},
+  MES:{tick:1.25, perPt:5,  name:'Micro E-mini S&P 500',  label:'MES'},
+  NQ :{tick:5.0,  perPt:20, name:'E-mini Nasdaq-100',     label:'NQ'},
+  MNQ:{tick:0.5,  perPt:2,  name:'Micro E-mini Nasdaq-100',label:'MNQ'}
 };
 let INST='ES';
 let TICK=INSTR[INST].tick;
@@ -307,10 +334,14 @@ const el={
 
 function cfg(){
   const p=+el.wr.value/100, stopT=+el.sl.value, bigT=+el.bw.value, pSmall=+el.ps.value/100;
+  // Your trail rule: arm at 1.25R, then ride half-a-stop behind price.
+  const armT  = Math.round(stopT*1.25);   // trail arms here (+1.25R, in ticks)
+  const trailGapT = Math.round(stopT/2);  // stop sits this many ticks under price
+  const lockT = armT - trailGapT;         // minimum profit you can be trailed out for
   return {
     p, pSmall,
-    loss: stopT*TICK, small: 7*TICK, big: bigT*TICK,
-    stopT, bigT,
+    loss: stopT*TICK, small: lockT*TICK, big: bigT*TICK,
+    stopT, bigT, armT, trailGapT, lockT,
     target:+el.tgt.value, maxLoss:+el.ml.value,
     trailing:el.trail.checked, dllOn:el.dll.checked, dll:1000,
     consOn:el.cons.checked, consFrac:0.5
@@ -438,6 +469,7 @@ function update(){
   // sync labels
   $('wrV').textContent=el.wr.value;
   $('slV').textContent=el.sl.value; $('slD').textContent=fmt$(c.loss);
+  $('trailHint').innerHTML=`Trail <b>arms at +${c.armT} ticks (1.25R)</b>, then your stop rides <b>${c.trailGapT} ticks</b> below price (half your stop). Worst case after it arms you still bank the <b>minimum lock = +${c.lockT} ticks · ${fmt$(c.small)}</b>.`;
   $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.loss)}</b>`;
   $('bwV').textContent=el.bw.value; $('bwD').textContent=fmt$(c.big);
   $('psV').textContent=el.ps.value;
@@ -461,6 +493,7 @@ function update(){
   drawDial(main.pass);
   drawEquity(c,main.paths);
   drawHist(main);
+  buildDay(c,a);
 
   // verdict
   const lead=$('verdLead'),body=$('verdBody');
@@ -487,6 +520,83 @@ function update(){
   tb.innerHTML=rows.map(([lab,vals,hl])=>`<tr><td>${lab}</td>${vals.map((v,i)=>`<td class="${hl&&hl[i]?'winner':''}">${v}</td>`).join('')}</tr>`).join('');
 
   buildAnswers(c,a,cols,main);
+}
+
+/* ---- "your trading day" card ---- */
+function buildDay(c,a){
+  // per-trade outcomes in $: loss, minimum-lock win, runner win
+  const avgDay   = N*a.E;                                    // expected $ on an average day
+  const bestDay  = N*c.big;                                  // every trade becomes a full runner
+  const rawWorst = N*c.loss;                                 // every trade stops out
+  const worstDay = c.dllOn ? Math.min(rawWorst, c.dll) : rawWorst; // daily-loss limit caps it
+  const goodDays = avgDay>0 ? Math.ceil(c.target/avgDay) : null;
+
+  $('dayStop').textContent  = c.stopT;
+  $('dayTrail').textContent = c.trailGapT;
+  $('dayN').textContent     = N;
+
+  $('dayAvgV').textContent = (avgDay>=0?'+':'')+fmt$(avgDay);
+  $('dayAvgV').className    = 'v sm '+(avgDay>=0?'pos':'neg');
+  $('dayAvgN').textContent  = (avgDay/TICK).toFixed(0)+' ticks · '+N+' trades';
+
+  $('dayBestV').textContent = '+'+fmt$(bestDay);
+  $('dayBestN').textContent = N+' runners @ '+c.bigT+'t';
+
+  $('dayWorstV').textContent = '-'+fmt$(worstDay);
+  $('dayWorstN').textContent = c.dllOn && rawWorst>c.dll
+      ? 'capped by $1k daily limit' : 'all '+N+' stops hit';
+
+  $('dayLine').innerHTML = avgDay>0
+    ? `On a typical day you make about <b class="pos">${fmt$(avgDay)}</b>. At that pace you'd reach the <b>${fmt$(c.target)}</b> target in roughly <b>${goodDays} average days</b> of trading. A clean day where every trade trends is <b class="pos">+${fmt$(bestDay)}</b>; your hard stop on a full red day is <b class="neg">-${fmt$(worstDay)}</b>${c.dllOn&&rawWorst>c.dll?` (the $1,000 daily-loss limit pulls you out before the full ${fmt$(rawWorst)})`:''}.`
+    : `On a typical day you <b class="neg">lose ${fmt$(-avgDay)}</b> — the edge is negative, so more days just dig the hole deeper. Fix the win rate or the runner size before sizing up. Worst day is <b class="neg">-${fmt$(worstDay)}</b>.`;
+
+  buildScenarios(c,a);
+}
+
+/* ---- enumerate every possible day result + its probability ---- */
+function fact(n){let r=1;for(let i=2;i<=n;i++)r*=i;return r;}
+function buildScenarios(c,a){
+  const pL=1-c.p, pS=c.p*c.pSmall, pB=c.p*(1-c.pSmall);   // loss / min-lock / runner
+  const rows=[];
+  let dllCapped=false;
+  for(let nB=0;nB<=N;nB++)for(let nS=0;nS<=N-nB;nS++){
+    const nL=N-nB-nS;
+    const prob=(fact(N)/(fact(nB)*fact(nS)*fact(nL)))*Math.pow(pB,nB)*Math.pow(pS,nS)*Math.pow(pL,nL);
+    if(prob<=0) continue;
+    const raw=nB*c.big+nS*c.small-nL*c.loss;
+    let pnl=raw;
+    if(c.dllOn && raw < -c.dll){ pnl=-c.dll; dllCapped=true; }   // daily-loss limit floor
+    const parts=[];
+    if(nB) parts.push(`${nB} runner${nB>1?'s':''}`);
+    if(nS) parts.push(`${nS} min-lock${nS>1?'s':''}`);
+    if(nL) parts.push(`${nL} loss${nL>1?'es':''}`);
+    rows.push({label:parts.join(' + ')||'—', pnl, raw, prob, capped:pnl!==raw});
+  }
+  rows.sort((x,y)=>y.pnl-x.pnl);
+  const maxP=Math.max(...rows.map(r=>r.prob));
+  let green=0,flat=0,red=0;
+  rows.forEach(r=>{ if(r.pnl>0)green+=r.prob; else if(r.pnl<0)red+=r.prob; else flat+=r.prob; });
+  const pct=v=>(v*100).toFixed(v>=0.0995?0:1)+'%';
+
+  $('dayN2').textContent=N;
+  $('scGreen').textContent=pct(green);
+  $('scFlat').textContent=pct(flat);
+  $('scRed').textContent=pct(red);
+  $('scDllNote').innerHTML = dllCapped
+    ? `Results marked <span class="gold">*</span> are floored by the <b>$1,000 daily-loss limit</b> — the day stops you out before the full loss lands.` : '';
+
+  $('daySc').querySelector('tbody').innerHTML = rows.map(r=>{
+    const cls=r.pnl>0?'pos':r.pnl<0?'neg':'gold';
+    const sign=r.pnl>0?'+':r.pnl<0?'-':'';
+    const bar=Math.max(3,Math.round(r.prob/maxP*100));
+    const barCol=r.pnl>0?'var(--green)':r.pnl<0?'var(--red)':'var(--gold)';
+    return `<tr>
+      <td>${r.label}${r.capped?' <span class="gold">*</span>':''}</td>
+      <td class="${cls}">${sign}${fmt$(Math.abs(r.pnl))}</td>
+      <td>${pct(r.prob)}</td>
+      <td style="width:34%"><div style="background:var(--panel2);border-radius:5px;height:9px;overflow:hidden"><div style="width:${bar}%;height:100%;background:${barCol};opacity:.85"></div></div></td>
+    </tr>`;
+  }).join('');
 }
 
 function buildAnswers(c,a,cols,main){
@@ -574,7 +684,7 @@ $('save').onclick=()=>{
     ['Daily Sharpe', (a.sharpeTrade*Math.sqrt(N)).toFixed(2)],
     ['Median days to pass', (m.med??'—')+''],
     ['Stop loss', el.sl.value+'t · '+fmt$(c.loss)],
-    ['Runner winner', el.bw.value+'t · '+fmt$(c.big)],
+    ['Average runner', el.bw.value+'t · '+fmt$(c.big)],
   ];
   let gx=40, gy=320, gw=(w-80-3*16)/4, gh=120;
   stats.forEach((s,i)=>{
