@@ -149,7 +149,7 @@
   thousands of simulated Combine attempts using your exact trade-management rules.</p>
 
   <div class="flag">
-    <b>Tick value matters.</b> &nbsp;① <span id="flagTick"><b>ES = $12.50/tick</b>, so a 16-tick stop risks <b>$200</b></span> — dollars are tied to ticks, so switching to <b>NQ ($5/tick)</b> rescales every figure automatically. Pick whichever you actually trade.
+    <b>You set the dollars you risk.</b> &nbsp;① <span id="flagTick"><b>ES = $12.50/tick</b>, so a 16-tick stop risks <b>$200</b></span> — type your real risk-per-trade and the simulator works out the <b>contracts</b> needed. Switching instrument changes the <b>size</b>, not your dollar risk.
     &nbsp;② A real Topstep 50K Combine also has a <b>$1,000 daily-loss limit</b> and a <b>50% consistency rule</b> (best day &lt; half of total profit). Both are on by default because they change the 2-vs-3 answer.
   </div>
 
@@ -175,9 +175,15 @@
       </div>
 
       <div class="ctl">
-        <label>Stop loss (your risk) <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span></span></label>
+        <label>Stop-loss distance <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span> risk</span></label>
         <input type="range" id="sl" min="8" max="24" value="16" step="1">
         <small class="hint" id="trailHint"></small>
+      </div>
+
+      <div class="ctl">
+        <label style="display:block">💵 Risk per trade ($) <span style="color:var(--dim2);font-weight:400">— what one stop-out costs you</span></label>
+        <input type="number" id="riskUsd" value="200" step="25" min="5" style="width:100%;text-align:left;font-size:15px;padding:9px 11px">
+        <small class="hint" id="sizeHint"></small>
       </div>
 
       <div class="ctl">
@@ -329,8 +335,10 @@ let lastMain=null, lastA=null;   // cache for the Save snapshot
 
 const el={
   wr:$('wr'),sl:$('sl'),bw:$('bw'),ps:$('ps'),tgt:$('tgt'),ml:$('ml'),
+  riskUsd:$('riskUsd'),
   trail:$('trail'),dll:$('dll'),cons:$('cons')
 };
+const fmtNum=n=>Number(n.toFixed(2)).toLocaleString();
 
 function cfg(){
   const p=+el.wr.value/100, stopT=+el.sl.value, bigT=+el.bw.value, pSmall=+el.ps.value/100;
@@ -338,10 +346,16 @@ function cfg(){
   const armT  = Math.round(stopT*1.25);   // trail arms here (+1.25R, in ticks)
   const trailGapT = Math.round(stopT/2);  // stop sits this many ticks under price
   const lockT = armT - trailGapT;         // minimum profit you can be trailed out for
+  // Dollar risk drives position size: contracts = $risk / (stop distance in $ per contract)
+  const perContractRisk = stopT*TICK;     // $ a 1-lot loses on this stop
+  let riskUsd = +el.riskUsd.value;
+  if(!(riskUsd>0)) riskUsd = perContractRisk;   // guard empty/0 input → 1 contract
+  const contracts = riskUsd/perContractRisk;
   return {
     p, pSmall,
-    loss: stopT*TICK, small: lockT*TICK, big: bigT*TICK,
+    loss: riskUsd, small: lockT*TICK*contracts, big: bigT*TICK*contracts,
     stopT, bigT, armT, trailGapT, lockT,
+    riskUsd, contracts, perContractRisk,
     target:+el.tgt.value, maxLoss:+el.ml.value,
     trailing:el.trail.checked, dllOn:el.dll.checked, dll:1000,
     consOn:el.cons.checked, consFrac:0.5
@@ -470,16 +484,18 @@ function update(){
   $('wrV').textContent=el.wr.value;
   $('slV').textContent=el.sl.value; $('slD').textContent=fmt$(c.loss);
   $('trailHint').innerHTML=`Trail <b>arms at +${c.armT} ticks (1.25R)</b>, then your stop rides <b>${c.trailGapT} ticks</b> below price (half your stop). Worst case after it arms you still bank the <b>minimum lock = +${c.lockT} ticks · ${fmt$(c.small)}</b>.`;
-  $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.loss)}</b>`;
+  $('sizeHint').innerHTML=`To risk <b class="gold">${fmt$(c.riskUsd)}</b> with a ${c.stopT}-tick stop you trade <b>≈ ${fmtNum(c.contracts)} ${INST}</b> contract${c.contracts===1?'':'s'} (1 lot = ${fmt$(c.perContractRisk)} risk). Min-lock win <b class="pos">${fmt$(c.small)}</b> · runner <b class="pos">${fmt$(c.big)}</b>.`;
+  $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.perContractRisk)}</b> per contract — at <b>${fmt$(c.riskUsd)}</b> risk that's ≈ ${fmtNum(c.contracts)} lot${c.contracts===1?'':'s'}`;
   $('bwV').textContent=el.bw.value; $('bwD').textContent=fmt$(c.big);
   $('psV').textContent=el.ps.value;
   $('tgtLeg').textContent=(+el.tgt.value).toLocaleString();
   $('ecN').textContent=N; $('hN').textContent=N;
 
   const a=analytics(c);
+  const tpc=TICK*c.contracts;   // $ per tick at current size → convert $ back to price-ticks
   $('expV').textContent=fmt$(a.E); $('expV').className='v '+(a.E>=0?'pos':'neg');
-  $('expN').textContent=(a.E>=0?'+':'')+(a.E/TICK).toFixed(1)+' ticks/trade';
-  $('rrV').textContent=a.rr.toFixed(2)+' : 1'; $('rrN').textContent='avg win '+(a.meanWin/TICK).toFixed(0)+'t';
+  $('expN').textContent=(a.E>=0?'+':'')+(a.E/tpc).toFixed(1)+' ticks/trade';
+  $('rrV').textContent=a.rr.toFixed(2)+' : 1'; $('rrN').textContent='avg win '+(a.meanWin/tpc).toFixed(0)+'t';
   $('beV').textContent=(a.be*100).toFixed(1)+'%';
   const above=c.p>=a.be;
   $('beN').innerHTML=above?'<span class="pos">above it ✓</span>':'<span class="neg">below it ✗</span>';
@@ -499,11 +515,11 @@ function update(){
   const lead=$('verdLead'),body=$('verdBody');
   if(a.E<0){
     lead.innerHTML='<span class="neg">Negative edge — this loses money.</span>';
-    body.innerHTML=`At ${(c.p*100).toFixed(0)}% you're below the ${ (a.be*100).toFixed(1)}% break-even. Pass odds are ~${(main.pass*100).toFixed(0)}%, and adding trades only speeds up the loss. Raise win rate to ${(a.be*100).toFixed(1)}%+ or grow the runner before risking real evaluation fees.`;
+    body.innerHTML=`At ${(c.p*100).toFixed(0)}% you're below the ${ (a.be*100).toFixed(1)}% break-even. Pass odds are ~${(main.pass*100).toFixed(0)}%, and adding trades only speeds up the loss. Raise win rate to ${(a.be*100).toFixed(1)}%+ or grow the runner before risking real evaluation fees. Edge ${fmt$(a.E)}/trade (${(a.E/tpc).toFixed(1)} ticks).`;
   } else {
     const tone=main.pass>=.7?'pos':main.pass>=.45?'gold':'neg';
     lead.innerHTML=`<span class="${tone}">${(main.pass*100).toFixed(0)}% chance to pass</span> at ${N}/day`;
-    body.innerHTML=`Edge is +${fmt$(a.E)}/trade (${(a.E/TICK).toFixed(1)} ticks). Typical passing run takes <b>${main.med??'—'} days</b>. Failing ${ (main.fail*100).toFixed(0)}%, still grinding ${(main.timeout*100).toFixed(0)}% after 250 days.`;
+    body.innerHTML=`Edge is +${fmt$(a.E)}/trade (${(a.E/tpc).toFixed(1)} ticks). Typical passing run takes <b>${main.med??'—'} days</b>. Failing ${ (main.fail*100).toFixed(0)}%, still grinding ${(main.timeout*100).toFixed(0)}% after 250 days.`;
   }
 
   // comparison table
@@ -537,7 +553,7 @@ function buildDay(c,a){
 
   $('dayAvgV').textContent = (avgDay>=0?'+':'')+fmt$(avgDay);
   $('dayAvgV').className    = 'v sm '+(avgDay>=0?'pos':'neg');
-  $('dayAvgN').textContent  = (avgDay/TICK).toFixed(0)+' ticks · '+N+' trades';
+  $('dayAvgN').textContent  = (avgDay/(TICK*c.contracts)).toFixed(0)+' ticks · '+N+' trades';
 
   $('dayBestV').textContent = '+'+fmt$(bestDay);
   $('dayBestN').textContent = N+' runners @ '+c.bigT+'t';
@@ -669,7 +685,7 @@ $('save').onclick=()=>{
   x.fillStyle='#9aa0ad'; x.textAlign='right'; x.fillText(new Date().toLocaleDateString(), w-40, 40); x.textAlign='left';
   x.fillStyle='#F3F0EC'; x.font=f(30,800); x.fillText('Risk Desk — '+INSTR[INST].label+' Combine Snapshot', 40, 70);
   x.fillStyle='#9aa0ad'; x.font=f(14,500);
-  x.fillText(`Topstep 50K · ${fmt$(c.target)} target / ${fmt$(c.maxLoss)} trailing · ${INST} @ ${fmt$(INSTR[INST].tick)}/tick`, 40, 110);
+  x.fillText(`Topstep 50K · ${fmt$(c.target)} target / ${fmt$(c.maxLoss)} trailing · ${INST} · ${fmt$(c.riskUsd)} risk/trade ≈ ${fmtNum(c.contracts)} lot`, 40, 110);
   // big pass %
   const passPct=Math.round(m.pass*100);
   const col=m.pass>=.7?'#3FB950':m.pass>=.45?'#F0B429':'#F2666B';
@@ -683,7 +699,7 @@ $('save').onclick=()=>{
     ['Break-even WR', (a.be*100).toFixed(1)+'%'],
     ['Daily Sharpe', (a.sharpeTrade*Math.sqrt(N)).toFixed(2)],
     ['Median days to pass', (m.med??'—')+''],
-    ['Stop loss', el.sl.value+'t · '+fmt$(c.loss)],
+    ['Stop · Risk', el.sl.value+'t · '+fmt$(c.riskUsd)],
     ['Average runner', el.bw.value+'t · '+fmt$(c.big)],
   ];
   let gx=40, gy=320, gw=(w-80-3*16)/4, gh=120;
@@ -705,7 +721,7 @@ $('save').onclick=()=>{
 };
 
 /* ---- wiring ---- */
-['wr','sl','bw','ps','tgt','ml'].forEach(id=>el[id].addEventListener('input',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);}));
+['wr','sl','bw','ps','tgt','ml','riskUsd'].forEach(id=>el[id].addEventListener('input',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);}));
 ['trail','dll','cons'].forEach(id=>el[id].addEventListener('change',update));
 document.querySelectorAll('#ndSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#ndSeg button').forEach(x=>x.classList.remove('on'));
