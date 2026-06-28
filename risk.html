@@ -177,13 +177,31 @@
       <div class="ctl">
         <label>Stop-loss distance <span class="val"><b id="slV">16</b> ticks · <span id="slD">$200</span> risk</span></label>
         <input type="range" id="sl" min="8" max="24" value="16" step="1">
-        <small class="hint" id="trailHint"></small>
+        <small class="hint">How far price runs against you before you're stopped out. This whole distance = your <b>1R</b> risk.</small>
       </div>
 
       <div class="ctl">
         <label style="display:block">💵 Risk per trade ($) <span style="color:var(--dim2);font-weight:400">— what one stop-out costs you</span></label>
         <input type="number" id="riskUsd" value="200" step="25" min="5" style="width:100%;text-align:left;font-size:15px;padding:9px 11px">
         <small class="hint" id="sizeHint"></small>
+      </div>
+
+      <div class="divider"></div>
+      <h2 style="margin-top:0">Your Trail <span style="color:var(--dim2);font-family:var(--sans);text-transform:none;letter-spacing:0;font-weight:400">— how you lock profit</span></h2>
+      <small class="hint" style="margin:-6px 0 14px;display:block;line-height:1.55">
+        You don't trail from entry. Price first has to run to your <b>arm point</b>. The moment it does, your stop jumps up to sit a set number of <b>ticks behind price</b> — and it keeps climbing every time price makes a new high, never dropping. If price pulls back that many ticks, you're trailed out <b>in profit</b>.
+      </small>
+
+      <div class="ctl">
+        <label>Start trailing when price hits <span class="val"><b id="armV">1.25</b>R · <span id="armTV">20t</span></span></label>
+        <input type="range" id="armRR" min="1" max="2" value="1.25" step="0.05">
+        <small class="hint">Below this point you're still on your full stop — no trail yet. Your rule = <b>1.25R</b>.</small>
+      </div>
+
+      <div class="ctl">
+        <label>Stop rides this far behind price <span class="val"><b id="trailGapV">8</b> ticks</span></label>
+        <input type="range" id="trailGap" min="1" max="20" value="8" step="1">
+        <small class="hint" id="trailHint"></small>
       </div>
 
       <div class="flag" style="margin-top:0;font-size:12.5px;padding:11px 13px">
@@ -317,7 +335,7 @@
       <span class="tag">Topstep 50K: $3k target · $2k trailing MLL · $1k DLL · 50% consistency</span>
     </div>
     <b>Model & assumptions.</b> Each trade is independent: a loss at your stop, a <b>minimum-lock win</b> (price stalls right after your
-    trail arms at 1.25R, leaving the stop half-a-stop behind), or a <b>runner win</b>, with the
+    trail arms, leaving your chosen trail-gap behind), or a <b>runner win</b>, with the
     probabilities you set. P&amp;L is tracked from $0. The trailing limit follows your end-of-day peak and locks at break-even
     once you're up the drawdown amount (Topstep's end-of-day trailing MLL). The daily-loss limit stops the day; the consistency
     rule blocks a "pass" until your best day is ≤ 50% of total profit. ~2,500 simulations per update (20,000 on Solve), capped at 250 days.
@@ -338,20 +356,22 @@ let INST='ES';
 let TICK=INSTR[INST].tick;
 let N=2;
 let lastMain=null, lastA=null;   // cache for the Save snapshot
+let trailTouched=false;          // until you drag the trail, it auto-tracks half your stop
 
 const el={
   wr:$('wr'),sl:$('sl'),bw:$('bw'),ps:$('ps'),tgt:$('tgt'),ml:$('ml'),
-  riskUsd:$('riskUsd'),
+  riskUsd:$('riskUsd'),armRR:$('armRR'),trailGap:$('trailGap'),
   trail:$('trail'),dll:$('dll'),cons:$('cons')
 };
 const fmtNum=n=>Number(n.toFixed(2)).toLocaleString();
 
 function cfg(){
   const p=+el.wr.value/100, stopT=+el.sl.value, bigT=+el.bw.value, pSmall=+el.ps.value/100;
-  // Your trail rule: arm at 1.25R, then ride half-a-stop behind price.
-  const armT  = Math.round(stopT*1.25);   // trail arms here (+1.25R, in ticks)
-  const trailGapT = Math.round(stopT/2);  // stop sits this many ticks under price
-  const lockT = armT - trailGapT;         // minimum profit you can be trailed out for
+  // Your trail rule: arm at a chosen R, then ride a chosen number of ticks behind price.
+  const armRR = +el.armRR.value;               // YOU choose when the trail arms (in R)
+  const armT  = Math.round(stopT*armRR);       // arm point in ticks
+  const trailGapT = +el.trailGap.value;        // YOU choose how far the stop rides behind
+  const lockT = Math.max(0, armT - trailGapT); // minimum profit locked once the trail arms
   // Dollar risk drives position size: contracts = $risk / (stop distance in $ per contract)
   const perContractRisk = stopT*TICK;     // $ a 1-lot loses on this stop
   let riskUsd = +el.riskUsd.value;
@@ -360,7 +380,7 @@ function cfg(){
   return {
     p, pSmall,
     loss: riskUsd, small: lockT*TICK*contracts, big: bigT*TICK*contracts,
-    stopT, bigT, armT, trailGapT, lockT,
+    stopT, bigT, armRR, armT, trailGapT, lockT,
     riskUsd, contracts, perContractRisk,
     target:+el.tgt.value, maxLoss:+el.ml.value,
     trailing:el.trail.checked, dllOn:el.dll.checked, dll:1000,
@@ -485,11 +505,15 @@ function drawHist(res){
 /* ---- main update ---- */
 let raf=null;
 function update(){
+  // until you set the trail yourself, keep it at half your stop (your rule)
+  if(!trailTouched){ el.trailGap.value=Math.max(1,Math.round((+el.sl.value)/2)); }
   const c=cfg();
   // sync labels
   $('wrV').textContent=el.wr.value;
   $('slV').textContent=el.sl.value; $('slD').textContent=fmt$(c.loss);
-  $('trailHint').innerHTML=`Trail <b>arms at +${c.armT} ticks (1.25R)</b>, then your stop rides <b>${c.trailGapT} ticks</b> below price (half your stop). Worst case after it arms you still bank the <b>minimum lock = +${c.lockT} ticks · ${(c.lockT/c.stopT).toFixed(2)}R · ${fmt$(c.small)}</b>.`;
+  $('armV').textContent=c.armRR.toFixed(2); $('armTV').textContent='+'+c.armT+'t';
+  $('trailGapV').textContent=c.trailGapT;
+  $('trailHint').innerHTML=`Default = <b>half your ${c.stopT}t stop</b> (${Math.round(c.stopT/2)}t)${trailTouched?' — you\'ve set it manually':''}. Arms at +${c.armT}t, rides ${c.trailGapT}t behind → the least a win can lock is <b class="pos">+${c.lockT} ticks · ${(c.lockT/c.stopT).toFixed(2)}R · ${fmt$(c.small)}</b>.`;
   $('sizeHint').innerHTML=`To risk <b class="gold">${fmt$(c.riskUsd)}</b> with a ${c.stopT}-tick stop you trade <b>≈ ${fmtNum(c.contracts)} ${INST}</b> contract${c.contracts===1?'':'s'} (1 lot = ${fmt$(c.perContractRisk)} risk). Min-lock win <b class="pos">${fmt$(c.small)}</b> · runner <b class="pos">${fmt$(c.big)}</b>.`;
   $('flagTick').innerHTML=`<b>${INST} = ${fmt$(TICK)}/tick</b>, so a ${el.sl.value}-tick stop risks <b>${fmt$(c.perContractRisk)}</b> per contract — at <b>${fmt$(c.riskUsd)}</b> risk that's ≈ ${fmtNum(c.contracts)} lot${c.contracts===1?'':'s'}`;
   const runnerRR = c.bigT/c.stopT;     // good winner as a reward:risk multiple
@@ -649,6 +673,8 @@ $('starter').onclick=()=>{
   el.sl.value=16;          // your 16-tick stop
   el.bw.value=32;          // good winners ≈ 2R (twice your risk)
   el.ps.value=50;          // assume half your wins are small, half run
+  el.armRR.value=1.25;     // trail arms at 1.25R (your rule)
+  trailTouched=false;      // trail back to auto = half the stop (8t)
   update();
   const b=$('starter'); b.textContent='✓ Starter assumptions loaded — tune as you learn'; b.style.borderColor='var(--gold)'; b.style.color='var(--gold)';
   setTimeout(()=>{b.textContent='✓ Use safe starter assumptions';b.style.borderColor='';b.style.color='';},2600);
@@ -743,7 +769,8 @@ $('save').onclick=()=>{
 };
 
 /* ---- wiring ---- */
-['wr','sl','bw','ps','tgt','ml','riskUsd'].forEach(id=>el[id].addEventListener('input',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);}));
+['wr','sl','bw','ps','tgt','ml','riskUsd','armRR','trailGap'].forEach(id=>el[id].addEventListener('input',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(update);}));
+el.trailGap.addEventListener('input',()=>{trailTouched=true;});   // stop auto-tracking once you set it
 ['trail','dll','cons'].forEach(id=>el[id].addEventListener('change',update));
 document.querySelectorAll('#ndSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#ndSeg button').forEach(x=>x.classList.remove('on'));
